@@ -44,7 +44,7 @@ image = cv2.imread(args["image"])
 
 # STEP 2: ================== Resize ==================
 # to reduce processing time
-image = imutils.resize(image, width=image.shape[1]//2, inter=3)
+#image = imutils.resize(image, width=image.shape[1]//2, inter=3)
 
 # STEP 2: ================== ColorSpace ==================
 # convert image to hsv
@@ -103,15 +103,16 @@ print("I count {} fruits (maybe not!) in this image".format(len(cnts)))
 # STEP X: ================== Display ==================
 # loop over the contours
 for (i, c) in enumerate(cnts):
-    # draw the bright spot on the image
-    (x, y, w, h) = cv2.boundingRect(c)
-    ((cX, cY), radius) = cv2.minEnclosingCircle(c)
+	# draw the bright spot on the image
+	(x, y, w, h) = cv2.boundingRect(c)
+	((cX, cY), radius) = cv2.minEnclosingCircle(c)
 
-    fruit = image[y:y + h, x:x + w]
-    cv2.imshow("Fruit", fruit)
+	fruit = image[y:y + h, x:x + w]
+	cv2.imshow("Fruit", fruit)
 
-    cv2.circle(image, (int(cX), int(cY)), int(radius), (255, 255, 255), 2)
-    cv2.putText(image, "#{}".format(i + 1), (x, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 2)
+	cv2.rectangle(image, (int(x), int(y)), (int(x+w), int(y+h)), (255, 255, 255), 2)
+	cv2.circle(image, (int(cX), int(cY)), int(radius), (255, 255, 255), 2)
+	cv2.putText(image, "#{}".format(i + 1), (x, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 2)
 
-    cv2.imshow("HSV Masking", np.hstack([image, res1]))
-    cv2.waitKey(0)
+	cv2.imshow("HSV Masking", np.hstack([image, res1]))
+	cv2.waitKey(0)

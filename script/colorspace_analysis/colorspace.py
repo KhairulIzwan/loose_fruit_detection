@@ -19,7 +19,7 @@ args = vars(ap.parse_args())
 image = cv2.imread(args["image"])
 
 # resize image
-resized = imutils.resize(image, width=image.shape[1]//2, inter=3)
+#resized = imutils.resize(image, width=image.shape[1]//2, inter=3)
 
 # Colorspace in OpenCV
 resized_gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
