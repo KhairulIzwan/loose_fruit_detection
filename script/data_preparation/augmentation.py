@@ -50,7 +50,7 @@ for (i, imagePath) in enumerate(imagePaths):
 	# construct the actual Python generator
 	print("[INFO] generating images...")
 	imageGen = aug.flow(image, batch_size=1, save_to_dir=dirPath,
-		save_prefix=args["prefix"], save_format="jpg")
+		save_prefix=args["prefix"] + str(i), save_format="jpg")
 
 	# loop over examples from our image data augmentation generator
 	for image in imageGen:

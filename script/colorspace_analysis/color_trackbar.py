@@ -28,37 +28,32 @@ args = vars(ap.parse_args())
 # load an image
 image = cv2.imread(args["image"])
 
-# resize image
-resized = imutils.resize(image, width=image.shape[1]//2, inter=3)
-
-
 while True:
-    # _, frame = cap.read()
-    hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
+	# _, frame = cap.read()
+	hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    l_h = cv2.getTrackbarPos("L - H", "Trackbars")
-    l_s = cv2.getTrackbarPos("L - S", "Trackbars")
-    l_v = cv2.getTrackbarPos("L - V", "Trackbars")
-    u_h = cv2.getTrackbarPos("U - H", "Trackbars")
-    u_s = cv2.getTrackbarPos("U - S", "Trackbars")
-    u_v = cv2.getTrackbarPos("U - V", "Trackbars")
+	l_h = cv2.getTrackbarPos("L - H", "Trackbars")
+	l_s = cv2.getTrackbarPos("L - S", "Trackbars")
+	l_v = cv2.getTrackbarPos("L - V", "Trackbars")
+	u_h = cv2.getTrackbarPos("U - H", "Trackbars")
+	u_s = cv2.getTrackbarPos("U - S", "Trackbars")
+	u_v = cv2.getTrackbarPos("U - V", "Trackbars")
 
-    lower_blue = np.array([l_h, l_s, l_v])
-    upper_blue = np.array([u_h, u_s, u_v])
-    mask = cv2.inRange(hsv, lower_blue, upper_blue)
+	lower_blue = np.array([l_h, l_s, l_v])
+	upper_blue = np.array([u_h, u_s, u_v])
+	mask = cv2.inRange(hsv, lower_blue, upper_blue)
 
-    result = cv2.bitwise_and(resized, resized, mask=mask)
+	result = cv2.bitwise_and(image, image, mask=mask)
 
-    cv2.imshow("Original Image", resized)
-    cv2.imshow("Mask", mask)
-    cv2.imshow("Result", result)
+	# resize image
+	resized_image = imutils.resize(image, width=image.shape[1]//2, inter=3)
+	resized_result = imutils.resize(result, width=image.shape[1]//2, inter=3)
 
-    print("lower_blue: {}".format(lower_blue))
-    print("upper_blue: {}".format(upper_blue))
+	cv2.imshow("Original --> Colorspace", np.hstack([resized_image, resized_result]))
 
-    key = cv2.waitKey(1)
-    if key == 27:
-        break
+	key = cv2.waitKey(1)
+	if key == 27:
+		break
 
 # cap.release()
 cv2.destroyAllWindows()
