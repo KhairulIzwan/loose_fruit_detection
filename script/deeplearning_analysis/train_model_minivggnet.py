@@ -1,26 +1,22 @@
-#!/usr/bin/env python3
+# set the matplotlib backend so figures can be saved in the background
+import matplotlib
+matplotlib.use("Agg")
 
 # import the necessary packages
-
-#import sys
-#sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
-import cv2
-
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from tensorflow.keras.preprocessing.image import img_to_array
-from tensorflow.keras.utils import to_categorical
-from dl4cv_pyimagesearch_nn_conv.lenet import LeNet
+from dl4cv_pyimagesearch_nn_conv.minivggnet import MiniVGGNet
+from tensorflow.keras.optimizers import SGD
 from imutils import paths
+import imutils
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
-import imutils
+import cv2
 import os
-import time
 
-# construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset of faces")
@@ -32,7 +28,8 @@ args = vars(ap.parse_args())
 data = []
 labels = []
 
-# loop over the input images
+# load the training and testing data, then scale it into the
+# range [0, 1]
 print("[INFO] loop over the input images...")
 for imagePath in sorted(list(paths.list_images(args["dataset"]))):
 	# load the image, pre-process it, and store it in the data list
@@ -51,54 +48,41 @@ for imagePath in sorted(list(paths.list_images(args["dataset"]))):
 	label = "fruit" if label == "pos" else "not_fruit"
 	labels.append(label)
 
-# scale the raw pixel intensities to the range [0, 1]
-print("[INFO] scale the raw pixel intensities to the range [0, 1]...")
-data = np.array(data, dtype="float") / 255.0
-labels = np.array(labels)
-
-# convert the labels from integers to vectors
-le = LabelEncoder().fit(labels)
-labels = to_categorical(le.transform(labels), 2)
-
-# account for skew in the labeled data
-classTotals = labels.sum(axis=0)
-classWeight = classTotals.max() / classTotals
-
-# partition the data into training and testing splits using 80% of
-# the data for training and the remaining 20% for testing
 (trainX, testX, trainY, testY) = train_test_split(data,
 	labels, test_size=0.20, stratify=labels, random_state=42)
+# convert the labels from integers to vectors
+lb = LabelBinarizer()
+trainY = lb.fit_transform(trainY)
+testY = lb.transform(testY)
 
-# initialize the model
+
+# initialize the optimizer and model
 print("[INFO] compiling model...")
-model = LeNet.build(width=28, height=28, depth=1, classes=2)
-model.compile(loss="binary_crossentropy", optimizer="adam",
-	metrics=["accuracy"])
+opt = SGD(lr=0.01, decay=0.01 / 40, momentum=0.9, nesterov=True)
+model = MiniVGGNet.build(width=28, height=28, depth=1, classes=2)
+model.compile(loss="categorical_crossentropy", optimizer=opt,
+metrics=["accuracy"])
 
 # train the network
 print("[INFO] training network...")
 H = model.fit(trainX, trainY, validation_data=(testX, testY),
-	class_weight=classWeight, batch_size=64, epochs=15, verbose=1)
+batch_size=64, epochs=15, verbose=1)
 
 # evaluate the network
 print("[INFO] evaluating network...")
 predictions = model.predict(testX, batch_size=64)
 print(classification_report(testY.argmax(axis=1),
-	predictions.argmax(axis=1), target_names=le.classes_))
+predictions.argmax(axis=1), target_names=labelNames))
 
-# save the model to disk
-print("[INFO] serializing network...")
-model.save(args["model"])
-
-# plot the training + testing loss and accuracy
+# plot the training loss and accuracy
 plt.style.use("ggplot")
 plt.figure()
 plt.plot(np.arange(0, 15), H.history["loss"], label="train_loss")
 plt.plot(np.arange(0, 15), H.history["val_loss"], label="val_loss")
-plt.plot(np.arange(0, 15), H.history["accuracy"], label="acc")
+plt.plot(np.arange(0, 15), H.history["accuracy"], label="train_acc")
 plt.plot(np.arange(0, 15), H.history["val_accuracy"], label="val_acc")
-plt.title("Training Loss and Accuracy")
+plt.title("Training Loss and Accuracy on CIFAR-10")
 plt.xlabel("Epoch #")
 plt.ylabel("Loss/Accuracy")
 plt.legend()
-plt.show()
+plt.savefig(args["output"])
