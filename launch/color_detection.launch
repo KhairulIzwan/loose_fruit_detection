@@ -1,0 +1,17 @@
+<launch>
+
+	<!-- LOOSE FRUIT DETECTION [ROBOT 1] -->
+	<node	pkg="loose_fruit_detection" 
+		name="robot1_color_detection" 
+		type="robot1_color_detection.py"> 
+		<!-- output="screen"> -->
+	</node>
+	
+	<!-- LOOSE FRUIT DETECTION [ROBOT 2] -->
+	<node	pkg="loose_fruit_detection" 
+		name="robot2_color_detection" 
+		type="robot2_color_detection.py"> 
+		<!-- output="screen"> -->
+	</node>
+
+</launch>

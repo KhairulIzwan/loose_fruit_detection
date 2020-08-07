@@ -27,16 +27,16 @@ from sensor_msgs.msg import CameraInfo
 from cv_bridge import CvBridge
 from cv_bridge import CvBridgeError
 
-class color_analysis_node:
+class ColorDetection:
 
 	def __init__(self, buffer=16):
 
-		rospy.logwarn("Color analysis (ROI) node [ONLINE]")
+		rospy.logwarn("[Robot2] Color Detection node [ONLINE]")
 
 		self.bridge = CvBridge()
 
-		# define the lower and upper boundaries of the "green"
-		# ball in the HSV color space, then initialize the
+		# define the lower and upper boundaries of the "oil palm"
+		# in the HSV color space, then initialize the
 		# list of tracked points
 		self.lower_red = (0, 120, 70)
         	self.upper_red = (10, 255, 255)
@@ -54,11 +54,11 @@ class color_analysis_node:
 		rospy.on_shutdown(self.cbShutdown)
 
 		# Subscribe to Image msg
-		image_topic = "/cv_camera/image_raw"
+		image_topic = "/cv_camera_robot2/image_raw"
 		self.image_sub = rospy.Subscriber(image_topic, Image, self.cbImage)
 
 		# Subscribe to CameraInfo msg
-		cameraInfo_topic = "/cv_camera/camera_info"
+		cameraInfo_topic = "/cv_camera_robot2/camera_info"
 		self.cameraInfo_sub = rospy.Subscriber(cameraInfo_topic, CameraInfo,
 			self.cbCameraInfo)
 
@@ -93,37 +93,33 @@ class color_analysis_node:
 	# Show the output frame
 	def cbShowImage(self):
 
-		cv2.imshow("loose fruit detector (ROI)", self.cv_image)
+		cv2.imshow("[Robot2] Loose Fruit Detector (ROI)", self.cv_image)
 		cv2.waitKey(1)
 
 	# Image information callback
 	def cbInfo(self):
 
-		print('center of fruit:{},{}'.format(self.dX,self.dY)) 
-		cv2.putText(self.cv_image, direction, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 1)
-		cv2.putText(self.cv_image, "dx: {}, dy: {}".format(self.dX, self.dY), (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX,
-			0.65, (255, 255, 255), 1)
-		# fontFace = cv2.FONT_HERSHEY_DUPLEX
-		# fontScale = 0.5
-		# color = (255, 255, 255)
-		# thickness = 1
-		# lineType = cv2.LINE_AA
-		# bottomLeftOrigin = False # if True (text upside down)
-		#
-		# self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
-		#
-		# cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20),
-		# 	fontFace, fontScale, color, thickness, lineType,
-		# 	bottomLeftOrigin)
-		# cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10),
-		# 	fontFace, fontScale, color, thickness, lineType,
-		# 	bottomLeftOrigin)
-		# cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight),
-		# 	(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale,
-		# 	color, thickness, lineType, bottomLeftOrigin)
+		fontFace = cv2.FONT_HERSHEY_DUPLEX
+		fontScale = 0.5
+		color = (255, 255, 255)
+		thickness = 1
+		lineType = cv2.LINE_AA
+		bottomLeftOrigin = False # if True (text upside down)
 
-	# Detect the face(s)
-	def cbFace(self):
+		self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
+
+		cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20), 
+			fontFace, fontScale, color, thickness, lineType, 
+			bottomLeftOrigin)
+		cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10), 
+			fontFace, fontScale, color, thickness, lineType, 
+			bottomLeftOrigin)
+		cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight), 
+			(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale, 
+			color, thickness, lineType, bottomLeftOrigin)
+
+	# Detect the "oil palm" loose fruit
+	def cbLooseFruit(self):
 		if self.image_received:
 			# resize the frame, blur it, and convert it to the HSV
 			# color space
@@ -157,7 +153,7 @@ class color_analysis_node:
 				((x, y), radius) = cv2.minEnclosingCircle(c)
 				M = cv2.moments(c)
 				center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-
+				
 				# only proceed if the radius meets a minimum size
 				if radius > 10:
 					# draw the circle and centroid on the frame,
@@ -165,8 +161,9 @@ class color_analysis_node:
 					cv2.circle(self.cv_image, (int(x), int(y)), int(radius),
 						(0, 255, 255), 2)
 					cv2.circle(self.cv_image, center, 5, (0, 0, 255), -1)
-					# update the points queue
-					self.pts.appendleft(center)
+					
+			# update the points queue
+			self.pts.appendleft(center)
 
 			# loop over the set of tracked points
 			for i in range(1, len(self.pts)):
@@ -174,61 +171,33 @@ class color_analysis_node:
 				# them
 				if self.pts[i - 1] is None or self.pts[i] is None:
 					continue
-
-				if self.counter >= 10 and i == 1 and self.pts[10] is not None:
-		  			# compute the difference between the x and y
-		  			# coordinates and re-initialize the direction
-		  			# text variables
-		  			self.dX = self.pts[-10][0] - self.pts[i][0]
-		  			self.dY = self.pts[-10][1] - self.pts[i][1]
-		  			(self.dirX, self.dirY) = ("", "")
-
-		  			# ensure there is significant movement in the
-		  			# x-direction
-		  			if np.abs(self.dX) > 20:
-		  				self.dirX = "East" if np.sign(self.dX) == 1 else "West"
-
-		  			# ensure there is significant movement in the
-		  			# y-direction
-		  			if np.abs(self.dY) > 20:
-		  				self.dirY = "North" if np.sign(self.dY) == 1 else "South"
-
-		  			# handle when both directions are non-empty
-		  			if self.dirX != "" and self.dirY != "":
-		  				self.direction = "{}-{}".format(self.dirY, self.dirX)
-
-		  			# otherwise, only one direction is non-empty
-		  			else:
-		  				self.direction = self.dirX if self.dirX != "" else self.dirY
-
+					
 				# otherwise, compute the thickness of the line and
 				# draw the connecting lines
 				thickness = int(np.sqrt(self.buffer / float(i + 1)) * 2.5)
-				cv2.line(self.cv_image, self.pts[i - 1], self.pts[i], (0, 0, 255), 					thickness)
+				cv2.line(self.cv_image, self.pts[i - 1], self.pts[i], (0, 0, 255), thickness)
 
-				self.cbInfo()
-			self.counter +=1
-				
+			self.cbInfo()
 			self.cbShowImage()
 
 			# Allow up to one second to connection
-			rospy.sleep(0.1)
+			rospy.sleep(0.01)
 		else:
 			rospy.logerr("No images recieved")
 
 	# rospy shutdown callback
 	def cbShutdown(self):
 		try:
-			rospy.logwarn("ColoredTracking (ROI) node [OFFLINE]")
+			rospy.logwarn("[Robot2] Color Detection node [OFFLINE]")
 		finally:
 			cv2.destroyAllWindows()
 
 if __name__ == '__main__':
 
 	# Initializing your ROS Node
-	rospy.init_node('color_analysis_node', anonymous=False)
-	color = color_analysis_node()
+	rospy.init_node('robot2_color_based_detection', anonymous=False)
+	color = ColorDetection()
 
 	# Camera preview
 	while not rospy.is_shutdown():
-		color.cbFace()
+		color.cbLooseFruit()
