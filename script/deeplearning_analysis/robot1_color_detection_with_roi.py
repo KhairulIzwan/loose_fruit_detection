@@ -20,7 +20,7 @@ import rospy
 import numpy as np
 
 # import the necessary ROS messages
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CameraInfo
 
@@ -32,12 +32,11 @@ from common_face_application.msg import objCenter as objCoord
 
 class ColorDetectionROI:
 
-	def __init__(self, buffer=16):
+	def __init__(self):
 
 		rospy.logwarn("[Robot1] Color Detection (ROI) node [ONLINE]")
 
 		self.bridge = CvBridge()
-#		self.roi = RegionOfInterest()
 		self.objectCoord = objCoord()
 
 		# define the lower and upper boundaries of the "oil palm"
@@ -47,9 +46,6 @@ class ColorDetectionROI:
         	self.upper_red = (10, 255, 255)
         	self.lowerRed = (170, 120, 70)
         	self.upperRed = (180, 255, 255)
-
-		self.pts = deque(maxlen=buffer)
-		self.buffer = buffer
 
 		self.image_recieved = False
 
@@ -65,6 +61,10 @@ class ColorDetectionROI:
 		self.cameraInfo_sub = rospy.Subscriber(cameraInfo_topic, CameraInfo,
 			self.cbCameraInfo)
 			
+		# Subscribe to Int32 msg
+		possible_fruit_topic = "/possible_fruit_robot1"
+		self.possible_fruit_sub = rospy.Subscriber(possible_fruit_topic, Int32, self.cbPossibleFruit)
+			
 		# Publish to objCenter msg
 		objCoord_topic = "/objCoord_robot1"
 		self.objCoord_pub = rospy.Publisher(objCoord_topic, objCoord, queue_size=10)
@@ -78,6 +78,7 @@ class ColorDetectionROI:
 		try:
 			self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
 			self.cv_image = cv2.flip(self.cv_image, 1)
+			self.cv_image_copy = self.cv_image.copy()
 		except CvBridgeError as e:
 			print(e)
 
@@ -96,6 +97,10 @@ class ColorDetectionROI:
 		# try to keep the object
 		self.centerX = self.imgWidth // 2
 		self.centerY = self.imgHeight // 2
+		
+	def cbPossibleFruit(self, msg):
+	
+		self.possible_fruit = msg.data
 
 	# Show the output frame
 	def cbShowImage(self):
@@ -113,30 +118,29 @@ class ColorDetectionROI:
 		lineType = cv2.LINE_AA
 		bottomLeftOrigin = False # if True (text upside down)
 
-		self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
+#		self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
 
-		cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20), 
-			fontFace, fontScale, color, thickness, lineType, 
+#		cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20), 
+#			fontFace, fontScale, color, thickness, lineType, 
+#			bottomLeftOrigin)
+		cv2.putText(self.cv_image, "Possible Fruit: %d"% (self.possible_fruit), (5, 20), 
+			fontFace, fontScale, (0, 0, 255), thickness, lineType, 
 			bottomLeftOrigin)
 		cv2.putText(self.cv_image, "(%d, %d)" % (self.objX, self.objY), 
 			(self.imgWidth-100, 20), fontFace, fontScale, 
 			color, thickness, lineType, bottomLeftOrigin)
-		cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10), 
-			fontFace, fontScale, color, thickness, lineType, 
-			bottomLeftOrigin)
-		cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight), 
-			(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale, 
-			color, thickness, lineType, bottomLeftOrigin)
+#		cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10), 
+#			fontFace, fontScale, color, thickness, lineType, 
+#			bottomLeftOrigin)
+#		cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight), 
+#			(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale, 
+#			color, thickness, lineType, bottomLeftOrigin)
 
 	# Detect the "oil palm" loose fruit
 	def cbLooseFruit(self):
 		if self.image_received:
-			# resize the frame, blur it, and convert it to the HSV
-			# color space
-			frame = imutils.resize(self.cv_image, width=self.imgWidth)
-			# blurred = cv2.GaussianBlur(self.cv_image, (11, 11), 0)
-			gray= cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2GRAY)
-			hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
+			gray= cv2.cvtColor(self.cv_image_copy, cv2.COLOR_BGR2GRAY)
+			hsv = cv2.cvtColor(self.cv_image_copy, cv2.COLOR_BGR2HSV)
 
 			# construct a mask for the color "green", then perform
 			# a series of dilations and erosions to remove any small
@@ -201,7 +205,7 @@ class ColorDetectionROI:
 			self.cbShowImage()
 
 			# Allow up to one second to connection
-			rospy.sleep(0.1)
+#			rospy.sleep(0.1)
 		else:
 			rospy.logerr("No images recieved")
 
