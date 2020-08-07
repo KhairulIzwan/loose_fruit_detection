@@ -99,32 +99,31 @@ class ColorDetection:
 	# Image information callback
 	def cbInfo(self):
 
-		fontFace = cv2.FONT_HERSHEY_DUPLEX
-		fontScale = 0.5
+		fontFace = cv2.FONT_HERSHEY_SIMPLEX
+		fontScale = 0.4
 		color = (255, 255, 255)
 		thickness = 1
 		lineType = cv2.LINE_AA
 		bottomLeftOrigin = False # if True (text upside down)
 
-		self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
+#		self.timestr = time.strftime("%Y%m%d-%H:%M:%S")
 
-		cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20), 
-			fontFace, fontScale, color, thickness, lineType, 
-			bottomLeftOrigin)
-		cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10), 
-			fontFace, fontScale, color, thickness, lineType, 
-			bottomLeftOrigin)
-		cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight), 
-			(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale, 
-			color, thickness, lineType, bottomLeftOrigin)
+#		cv2.putText(self.cv_image, "{}".format(self.timestr), (10, 20), 
+#			fontFace, fontScale, color, thickness, lineType, 
+#			bottomLeftOrigin)
+		cv2.putText(self.cv_image, "Possible Fruit: %d"% (len(np.unique(self.labels)) - 1), (5, 20), 
+			fontFace, fontScale, (0, 0, 255), thickness, lineType, 
+			bottomLeftOrigin)	
+#		cv2.putText(self.cv_image, "Sample", (10, self.imgHeight-10), 
+#			fontFace, fontScale, color, thickness, lineType, 
+#			bottomLeftOrigin)
+#		cv2.putText(self.cv_image, "(%d, %d)" % (self.imgWidth, self.imgHeight), 
+#			(self.imgWidth-100, self.imgHeight-10), fontFace, fontScale, 
+#			color, thickness, lineType, bottomLeftOrigin)
 
 	# Detect the "oil palm" loose fruit
 	def cbLooseFruit(self):
 		if self.image_received:
-			# resize the frame, blur it, and convert it to the HSV
-			# color space
-			frame = imutils.resize(self.cv_image, width=self.imgWidth)
-			# blurred = cv2.GaussianBlur(self.cv_image, (11, 11), 0)
 			gray= cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2GRAY)
 			hsv = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
 
@@ -136,52 +135,49 @@ class ColorDetection:
 			mask = mask1 + mask2
 			mask = cv2.erode(mask, None, iterations=1)
 			mask = cv2.dilate(mask, None, iterations=1)
-
-			# find contours in the mask and initialize the current
-			# (x, y) center of the ball
-			cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-				cv2.CHAIN_APPROX_SIMPLE)
-			cnts = imutils.grab_contours(cnts)
-			center = None
-
-			# only proceed if at least one contour was found
-			if len(cnts) > 0:
-				# find the largest contour in the mask, then use
-				# it to compute the minimum enclosing circle and
-				# centroid
-				c = max(cnts, key=cv2.contourArea)
-				((x, y), radius) = cv2.minEnclosingCircle(c)
-				M = cv2.moments(c)
-				center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+			
+			# compute the exact Euclidean distance from every binary
+			# pixel to the nearest zero pixel, then find peaks in this
+			# distance map
+			D = ndimage.distance_transform_edt(mask)
+			localMax = peak_local_max(D, indices=False, min_distance=30,
+				labels=mask)
 				
-				# only proceed if the radius meets a minimum size
-				if radius > 10:
-					# draw the circle and centroid on the frame,
-					# then update the list of tracked points
-					cv2.circle(self.cv_image, (int(x), int(y)), int(radius),
-						(0, 255, 255), 2)
-					cv2.circle(self.cv_image, center, 5, (0, 0, 255), -1)
-					
-			# update the points queue
-			self.pts.appendleft(center)
-
-			# loop over the set of tracked points
-			for i in range(1, len(self.pts)):
-				# if either of the tracked points are None, ignore
-				# them
-				if self.pts[i - 1] is None or self.pts[i] is None:
+			# perform a connected component analysis on the local peaks,
+			# using 8-connectivity, then appy the Watershed algorithm
+			markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+			self.labels = watershed(-D, markers, mask=mask)
+			
+			# loop over the unique labels returned by the Watershed
+			# algorithm
+			for label in np.unique(self.labels):
+				# if the label is zero, we are examining the 'background'
+				# so simply ignore it
+				if label == 0:
 					continue
 					
-				# otherwise, compute the thickness of the line and
-				# draw the connecting lines
-				thickness = int(np.sqrt(self.buffer / float(i + 1)) * 2.5)
-				cv2.line(self.cv_image, self.pts[i - 1], self.pts[i], (0, 0, 255), thickness)
+				# otherwise, allocate memory for the label region and draw
+				# it on the mask
+				mask = np.zeros(gray.shape, dtype="uint8")
+				mask[self.labels == label] = 255
+				
+				# detect contours in the mask and grab the largest one
+				cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+					cv2.CHAIN_APPROX_SIMPLE)
+				cnts = imutils.grab_contours(cnts)
+				c = max(cnts, key=cv2.contourArea)
+				
+				# draw a circle enclosing the object
+				((x, y), r) = cv2.minEnclosingCircle(c)
+				cv2.circle(self.cv_image, (int(x), int(y)), int(r), (0, 255, 0), 2)
+#				cv2.putText(self.cv_image, "#{}".format(label), (int(x) - 10, int(y)),
+#					cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
 
 			self.cbInfo()
 			self.cbShowImage()
 
 			# Allow up to one second to connection
-			rospy.sleep(0.01)
+			rospy.sleep(0.1)
 		else:
 			rospy.logerr("No images recieved")
 

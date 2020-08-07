@@ -142,7 +142,7 @@ class ColorDetection:
 			# pixel to the nearest zero pixel, then find peaks in this
 			# distance map
 			D = ndimage.distance_transform_edt(mask)
-			localMax = peak_local_max(D, indices=False, min_distance=50,
+			localMax = peak_local_max(D, indices=False, min_distance=30,
 				labels=mask)
 				
 			# perform a connected component analysis on the local peaks,
