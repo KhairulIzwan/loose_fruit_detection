@@ -20,7 +20,7 @@ import rospy
 import numpy as np
 
 # import the necessary ROS messages
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CameraInfo
 
@@ -33,11 +33,12 @@ from scipy import ndimage
 
 class ColorDetection:
 
-	def __init__(self, buffer=16):
+	def __init__(self):
 
 		rospy.logwarn("[Robot1] Color Detection node [ONLINE]")
 
 		self.bridge = CvBridge()
+		self.possible_fruit = Int32()
 
 		# define the lower and upper boundaries of the "oil palm"
 		# in the HSV color space, then initialize the
@@ -46,9 +47,6 @@ class ColorDetection:
         	self.upper_red = (10, 255, 255)
         	self.lowerRed = (170, 120, 70)
         	self.upperRed = (180, 255, 255)
-
-		self.pts = deque(maxlen=buffer)
-		self.buffer = buffer
 
 		self.image_recieved = False
 
@@ -63,6 +61,10 @@ class ColorDetection:
 		cameraInfo_topic = "/cv_camera_robot1/camera_info"
 		self.cameraInfo_sub = rospy.Subscriber(cameraInfo_topic, CameraInfo,
 			self.cbCameraInfo)
+			
+		# Publish to Int32 msg
+		possible_fruit_topic = "/possible_fruit_robot1"
+		self.possible_fruit_pub = rospy.Publisher(possible_fruit_topic, Int32, queue_size=10)
 
 		# Allow up to one second to connection
 		rospy.sleep(1)
@@ -142,7 +144,7 @@ class ColorDetection:
 			# pixel to the nearest zero pixel, then find peaks in this
 			# distance map
 			D = ndimage.distance_transform_edt(mask)
-			localMax = peak_local_max(D, indices=False, min_distance=30,
+			localMax = peak_local_max(D, indices=False, min_distance=50,
 				labels=mask)
 				
 			# perform a connected component analysis on the local peaks,
@@ -150,38 +152,47 @@ class ColorDetection:
 			markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
 			self.labels = watershed(-D, markers, mask=mask)
 			
-			# loop over the unique labels returned by the Watershed
-			# algorithm
-			for label in np.unique(self.labels):
-				# if the label is zero, we are examining the 'background'
-				# so simply ignore it
-				if label == 0:
-					continue
-					
-				# otherwise, allocate memory for the label region and draw
-				# it on the mask
-				mask = np.zeros(gray.shape, dtype="uint8")
-				mask[self.labels == label] = 255
-				
-				# detect contours in the mask and grab the largest one
-				cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-					cv2.CHAIN_APPROX_SIMPLE)
-				cnts = imutils.grab_contours(cnts)
-				c = max(cnts, key=cv2.contourArea)
-				
-				# draw a circle enclosing the object
-				((x, y), r) = cv2.minEnclosingCircle(c)
-				cv2.circle(self.cv_image, (int(x), int(y)), int(r), (0, 255, 0), 2)
-#				cv2.putText(self.cv_image, "#{}".format(label), (int(x) - 10, int(y)),
-#					cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+			self.pubPossibleFruit()
+			
+#			# loop over the unique labels returned by the Watershed
+#			# algorithm
+#			for label in np.unique(self.labels):
+#				# if the label is zero, we are examining the 'background'
+#				# so simply ignore it
+#				if label == 0:
+#					continue
+#					
+#				# otherwise, allocate memory for the label region and draw
+#				# it on the mask
+#				mask = np.zeros(gray.shape, dtype="uint8")
+#				mask[self.labels == label] = 255
+#				
+#				# detect contours in the mask and grab the largest one
+#				cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+#					cv2.CHAIN_APPROX_SIMPLE)
+#				cnts = imutils.grab_contours(cnts)
+#				c = max(cnts, key=cv2.contourArea)
+#				
+#				# draw a circle enclosing the object
+#				((x, y), r) = cv2.minEnclosingCircle(c)
+#				cv2.circle(self.cv_image, (int(x), int(y)), int(r), (0, 255, 0), 2)
+##				cv2.putText(self.cv_image, "#{}".format(label), (int(x) - 10, int(y)),
+##					cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
 
-			self.cbInfo()
-			self.cbShowImage()
+#			self.cbInfo()
+#			self.cbShowImage()
 
 			# Allow up to one second to connection
 			rospy.sleep(0.1)
 		else:
 			rospy.logerr("No images recieved")
+
+	# Publish to objCenter msg
+	def pubPossibleFruit(self):
+
+		self.possible_fruit.data = len(np.unique(self.labels)) - 1
+
+		self.possible_fruit_pub.publish(self.possible_fruit)
 
 	# rospy shutdown callback
 	def cbShutdown(self):
